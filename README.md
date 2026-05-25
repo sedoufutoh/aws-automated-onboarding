@@ -1,3 +1,48 @@
+# Automated Employee Onboarding System
+
+**Live Project | AWS Serverless | Event-Driven Architecture**
+
+---
+
+## 1. Problem Statement
+
+HR teams at small and mid-sized companies lose 5–10 hours per new hire manually sending welcome emails, notifying IT, and alerting managers. Errors and delays damage the new employee experience and slow down productivity from day one.
+
+---
+
+## 2. Cloud Solution
+
+A fully automated, event-driven onboarding pipeline built on AWS. When HR submits a new hire record via REST API, the system automatically:
+- Sends a personalized welcome email to the new employee
+- Sends an IT provisioning alert
+- Notifies the manager via SNS
+- Logs and tracks the onboarding status in DynamoDB
+
+Zero manual steps. Zero delays.
+
+---
+
+## 3. Architecture
+
+    HR submits new hire (API Gateway POST /onboard)
+            ↓
+    Lambda #1 — OnboardingIntake
+    - Validates payload
+    - Writes record to DynamoDB (status: PENDING)
+    - Publishes event to EventBridge
+            ↓
+    EventBridge Rule — NewHireSubmittedRule
+    - Listens for source: onboarding.system
+            ↓
+    Lambda #2 — OnboardingNotify
+    - SES → Welcome email to new hire
+    - SES → IT provisioning alert
+    - SNS → Manager notification
+    - Updates DynamoDB status to NOTIFIED
+            ↓
+    DynamoDB — OnboardingTable
+    - Tracks all records, status, timestamps
+
 ---
 
 ## 4. AWS Services Used
@@ -60,8 +105,8 @@
 - Python 3.12
 
 ### Step 1 — DynamoDB
-- Create table: `OnboardingTable`
-- Partition key: `employeeId` (String)
+- Create table: OnboardingTable
+- Partition key: employeeId (String)
 - Capacity: On-demand
 
 ### Step 2 — SES
@@ -69,55 +114,52 @@
 - Request SES production access to send to any address
 
 ### Step 3 — IAM Roles
-- `OnboardingIntakeRole`: AmazonDynamoDBFullAccess + AmazonEventBridgeFullAccess
-- `OnboardingNotifyRole`: AmazonDynamoDBFullAccess + AmazonSESFullAccess + AmazonSNSFullAccess
+- OnboardingIntakeRole: AmazonDynamoDBFullAccess + AmazonEventBridgeFullAccess
+- OnboardingNotifyRole: AmazonDynamoDBFullAccess + AmazonSESFullAccess + AmazonSNSFullAccess
 
 ### Step 4 — SNS Topic
-- Create Standard topic: `OnboardingManagerAlert`
+- Create Standard topic: OnboardingManagerAlert
 - Add email subscription and confirm
 
 ### Step 5 — Lambda #1
-- Name: `OnboardingIntake` | Runtime: Python 3.12
-- Attach `OnboardingIntakeRole`
-- Deploy `lambda_intake.py`
+- Name: OnboardingIntake | Runtime: Python 3.12
+- Attach OnboardingIntakeRole
+- Deploy lambda_intake.py
 
 ### Step 6 — Lambda #2
-- Name: `OnboardingNotify` | Runtime: Python 3.12
-- Attach `OnboardingNotifyRole`
-- Update `SENDER_EMAIL` and `SNS_TOPIC_ARN` in code
-- Deploy `lambda_notify.py`
+- Name: OnboardingNotify | Runtime: Python 3.12
+- Attach OnboardingNotifyRole
+- Update SENDER_EMAIL and SNS_TOPIC_ARN in code
+- Deploy lambda_notify.py
 
 ### Step 7 — EventBridge
-- Create rule: `NewHireSubmittedRule`
-- Event pattern:
-```json
-{
-  "source": ["onboarding.system"],
-  "detail-type": ["NewHireSubmitted"]
-}
-```
-- Target: Lambda function `OnboardingNotify`
+- Create rule: NewHireSubmittedRule
+- Event pattern: source = onboarding.system, detail-type = NewHireSubmitted
+- Target: Lambda function OnboardingNotify
 
 ### Step 8 — API Gateway
-- Create REST API: `OnboardingAPI`
-- Resource: `/onboard` with CORS enabled
-- Method: POST → Lambda proxy → `OnboardingIntake`
-- Deploy to stage: `prod`
+- Create REST API: OnboardingAPI
+- Resource: /onboard with CORS enabled
+- Method: POST → Lambda proxy → OnboardingIntake
+- Deploy to stage: prod
 
 ### Step 9 — Test
-```bash
-curl --ssl-no-revoke -X POST https://YOUR-API-ID.execute-api.us-east-1.amazonaws.com/prod/onboard \
--H "Content-Type: application/json" \
--d "{\"name\": \"John Doe\", \"email\": \"your@email.com\", \"department\": \"Engineering\", \"startDate\": \"2026-06-01\", \"managerEmail\": \"manager@email.com\"}"
-```
+Send a POST request to your API endpoint with this JSON body:
+
+    {
+      "name": "John Doe",
+      "email": "your@email.com",
+      "department": "Engineering",
+      "startDate": "2026-06-01",
+      "managerEmail": "manager@email.com"
+    }
 
 Expected response:
-```json
-{
-  "message": "New hire submitted successfully",
-  "employeeId": "uuid-here"
-}
-```
+
+    {
+      "message": "New hire submitted successfully",
+      "employeeId": "uuid-here"
+    }
 
 ---
 
@@ -127,7 +169,7 @@ Expected response:
 |---|---|
 | SES emails landing in spam | Expected for Gmail sender addresses in test environments. Production deployments use verified business domains |
 | EventBridge target not available | Lambda #2 must be deployed before creating the EventBridge rule |
-| Windows SSL error with curl | Resolved with `--ssl-no-revoke` flag |
+| Windows SSL error with curl | Resolved with --ssl-no-revoke flag |
 
 ---
 
@@ -142,7 +184,7 @@ Expected response:
 
 ## Author
 
-**Sedou Futoh**
-AWS Certified Cloud Practitioner | Junior IT Analyst
-Calgary, Alberta, Canada
+**Sedou Futoh**  
+AWS Certified Cloud Practitioner | Junior IT Analyst  
+Calgary, Alberta, Canada  
 [Portfolio](https://sedoufutoh.com) | [LinkedIn](https://linkedin.com/in/sedoufutoh)
